@@ -20,6 +20,7 @@ defmodule Pow.Ecto.Schema.Password do
       config :pow, Pow.Ecto.Schema.Password, iterations: 1
   """
   alias Pow.Ecto.Schema.Password.Pbkdf2
+  alias Pow.Extension.Base64
 
   @doc """
   Generates an encoded PBKDF2 hash.
@@ -38,13 +39,13 @@ defmodule Pow.Ecto.Schema.Password do
   """
   @spec pbkdf2_hash(binary(), Keyword.t() | nil) :: binary()
   def pbkdf2_hash(secret, opts \\ nil) do
-    opts        = opts || Application.get_env(:pow, __MODULE__, [])
-    iterations  = Keyword.get(opts, :iterations, 100_000)
-    length      = Keyword.get(opts, :length, 64)
-    digest      = Keyword.get(opts, :digest, :sha512)
+    opts = opts || Application.get_env(:pow, __MODULE__, [])
+    iterations = Keyword.get(opts, :iterations, 100_000)
+    length = Keyword.get(opts, :length, 64)
+    digest = Keyword.get(opts, :digest, :sha512)
     salt_length = Keyword.get(opts, :salt_length, 16)
-    salt        = Keyword.get(opts, :salt, :crypto.strong_rand_bytes(salt_length))
-    hash        = Pbkdf2.generate(secret, salt, iterations, length, digest)
+    salt = Keyword.get(opts, :salt, :crypto.strong_rand_bytes(salt_length))
+    hash = Pbkdf2.generate(secret, salt, iterations, length, digest)
 
     encode(digest, iterations, salt, hash)
   end
@@ -69,8 +70,8 @@ defmodule Pow.Ecto.Schema.Password do
   end
 
   defp encode(digest, iterations, salt, hash) do
-    salt = Base.encode64(salt)
-    hash = Base.encode64(hash)
+    salt = Base64.encode(salt)
+    hash = Base64.encode(hash)
 
     "$pbkdf2-#{digest}$#{iterations}$#{salt}$#{hash}"
   end
@@ -78,10 +79,10 @@ defmodule Pow.Ecto.Schema.Password do
   defp decode(hash) do
     case String.split(hash, "$", trim: true) do
       ["pbkdf2-" <> digest, iterations, salt, hash] ->
-        {:ok, salt} = Base.decode64(salt)
-        {:ok, hash} = Base.decode64(hash)
-        digest      = String.to_existing_atom(digest)
-        iterations  = String.to_integer(iterations)
+        {:ok, salt} = Base64.decode(salt)
+        {:ok, hash} = Base64.decode(hash)
+        digest = String.to_existing_atom(digest)
+        iterations = String.to_integer(iterations)
 
         [digest, iterations, salt, hash]
 
@@ -91,7 +92,7 @@ defmodule Pow.Ecto.Schema.Password do
   end
 
   defp verify([digest, iterations, salt, hash], secret, opts) do
-    length      = Keyword.get(opts, :length, 64)
+    length = Keyword.get(opts, :length, 64)
     secret_hash = Pbkdf2.generate(secret, salt, iterations, length, digest)
 
     Pbkdf2.compare(hash, secret_hash)
@@ -99,5 +100,5 @@ defmodule Pow.Ecto.Schema.Password do
 
   @spec raise_not_valid_password_hash!() :: no_return()
   defp raise_not_valid_password_hash!,
-    do: raise ArgumentError, "not a valid encoded password hash"
+    do: raise(ArgumentError, "not a valid encoded password hash")
 end
